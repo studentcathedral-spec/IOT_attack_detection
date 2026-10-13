@@ -4,6 +4,8 @@ import numpy as np
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import LabelEncoder
 from sklearn.ensemble import RandomForestClassifier
+from sklearn.tree import DecisionTreeClassifier
+from time import time
 from sklearn.metrics import (
     accuracy_score,
     precision_score,
@@ -22,6 +24,14 @@ import seaborn as sns
 # ---------------------------------------
 
 df = pd.read_csv("RT_IOT2022.csv")
+
+# Remove automatically generated index columns
+df = df.loc[:, ~df.columns.str.startswith("Unnamed:")]
+
+# 2. Separate target
+X = df.drop(columns=["Attack_type"])
+y = df["Attack_type"]
+
 
 print("Dataset shape:", df.shape)
 print("\nFirst 5 rows:")
@@ -98,18 +108,92 @@ print("\nTraining samples:", len(X_train))
 print("Testing samples:", len(X_test))
 
 
+
 # ---------------------------------------
-# 7. Train Random Forest
+# 7. Compare Two Algorithms
 # ---------------------------------------
 
-model = RandomForestClassifier(
-    n_estimators=100,
-    random_state=42,
-    n_jobs=-1
+models = {
+    "Decision Tree": DecisionTreeClassifier(
+        random_state=42
+    ),
+    "Random Forest": RandomForestClassifier(
+        n_estimators=100,
+        random_state=42,
+        n_jobs=-1
+    )
+}
+
+results = []
+
+for name, model in models.items():
+
+    start_time = time()
+
+    model.fit(X_train, y_train)
+
+    training_time = time() - start_time
+
+    y_pred = model.predict(X_test)
+
+    accuracy = accuracy_score(y_test, y_pred)
+    precision = precision_score(
+        y_test, y_pred,
+        average="weighted",
+        zero_division=0
+    )
+    recall = recall_score(
+        y_test, y_pred,
+        average="weighted",
+        zero_division=0
+    )
+    f1 = f1_score(
+        y_test, y_pred,
+        average="weighted",
+        zero_division=0
+    )
+    macro_f1 = f1_score(
+        y_test, y_pred,
+        average="macro",
+        zero_division=0
+    )
+
+    results.append({
+        "Algorithm": name,
+        "Accuracy (%)": round(accuracy * 100, 2),
+        "Precision (%)": round(precision * 100, 2),
+        "Recall (%)": round(recall * 100, 2),
+        "Weighted F1 (%)": round(f1 * 100, 2),
+        "Macro F1 (%)": round(macro_f1 * 100, 2),
+        "Training Time (seconds)": round(training_time, 2)
+    })
+
+    print(f"\n{name} - Classification Report")
+    print(classification_report(
+        y_test,
+        y_pred,
+        labels=list(range(len(label_encoder.classes_))),
+        target_names=label_encoder.classes_,
+        zero_division=0
+    ))
+
+    # Save predictions from Random Forest for your existing graphs
+    if name == "Random Forest":
+        rf_model = model
+        rf_predictions = y_pred
+
+# Display comparison table
+comparison_df = pd.DataFrame(results)
+
+print("\n========== ALGORITHM COMPARISON ==========")
+print(comparison_df.to_string(index=False))
+
+comparison_df.to_csv(
+    "algorithm_comparison.csv",
+    index=False
 )
 
-model.fit(X_train, y_train)
-
+print("\nSaved comparison to algorithm_comparison.csv")
 
 # ---------------------------------------
 # 8. Make Predictions
